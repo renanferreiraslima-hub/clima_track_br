@@ -1,132 +1,232 @@
-// ============================================================
-//  api.js – Previsão do Tempo com Open-Meteo
-// ============================================================
+function show(id) { document.getElementById(id).classList.remove('hidden') }
+function hide(id) { document.getElementById(id).classList.add('hidden') }
 
-// ── 1. Mapeamento de weather codes para descrição e emoji ──
-function getWeatherInfo(code) {
-  const map = {
-    0:  { desc: 'Céu limpo',                  icon: '☀️'  },
-    1:  { desc: 'Principalmente limpo',        icon: '🌤'  },
-    2:  { desc: 'Parcialmente nublado',        icon: '⛅'  },
-    3:  { desc: 'Nublado',                     icon: '☁️'  },
-    45: { desc: 'Neblina',                     icon: '🌫'  },
-    48: { desc: 'Neblina com geada',           icon: '🌫'  },
-    51: { desc: 'Garoa leve',                  icon: '🌦'  },
-    53: { desc: 'Garoa moderada',              icon: '🌦'  },
-    55: { desc: 'Garoa intensa',               icon: '🌧'  },
-    61: { desc: 'Chuva leve',                  icon: '🌧'  },
-    63: { desc: 'Chuva moderada',              icon: '🌧'  },
-    65: { desc: 'Chuva intensa',               icon: '🌧'  },
-    71: { desc: 'Neve leve',                   icon: '🌨'  },
-    73: { desc: 'Neve moderada',               icon: '❄️'  },
-    75: { desc: 'Neve intensa',                icon: '❄️'  },
-    80: { desc: 'Pancadas de chuva',           icon: '🌦'  },
-    81: { desc: 'Pancadas moderadas',          icon: '🌧'  },
-    82: { desc: 'Pancadas violentas',          icon: '⛈'  },
-    95: { desc: 'Trovoada',                    icon: '⛈'  },
-    96: { desc: 'Trovoada com granizo',        icon: '⛈'  },
-    99: { desc: 'Trovoada forte c/ granizo',   icon: '⛈'  },
-  };
-  return map[code] || { desc: 'Condição desconhecida', icon: '🌡' };
-}
-
-// ── 2. Converte graus de vento em direção cardeal ──
-function getWindDirection(deg) {
-  const dirs = ['N','NE','L','SE','S','SO','O','NO'];
-  return dirs[Math.round(deg / 45) % 8];
-}
-
-// ── 3. Formata a data/hora ISO para exibição ──
-function formatTime(isoStr) {
-  const d = new Date(isoStr);
-  return d.toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-}
-
-// ── 4. Mostra / esconde elementos ──
-function show(id) { document.getElementById(id).classList.remove('hidden'); }
-function hide(id) { document.getElementById(id).classList.add('hidden');    }
-
-// ── 5. Exibe mensagem de erro ──
 function showError(msg) {
-  const el = document.getElementById('errorMsg');
-  el.textContent = msg;
-  show('errorMsg');
+  const el = document.getElementById('errorMsg')
+  el.textContent = msg
+  el.classList.remove('hidden')
 }
 
-// ── 6. Preenche o card de clima no HTML ──
-function renderWeather(cityName, data) {
-  const c    = data.current;
-  const info = getWeatherInfo(c.weather_code);
-
-  document.getElementById('cityName').textContent    = cityName;
-  document.getElementById('temperature').textContent = c.temperature_2m + '°C';
-  document.getElementById('weatherIcon').textContent = info.icon;
-  document.getElementById('weatherDesc').textContent = info.desc;
-  document.getElementById('windSpeed').textContent   = c.wind_speed_10m + ' km/h';
-  document.getElementById('windDir').textContent     = getWindDirection(c.wind_direction_10m);
-  document.getElementById('elevation').textContent   = data.elevation + ' m';
-  document.getElementById('updateTime').textContent  = formatTime(c.time);
-
-  show('weatherCard');
+function getIcon(code) {
+  if (code === 0)  return "☀️"
+  if (code <= 2)   return "⛅"
+  if (code === 3)  return "☁️"
+  if (code < 50)   return "🌫️"
+  if (code < 60)   return "🌦️"
+  if (code < 70)   return "🌧️"
+  if (code < 80)   return "❄️"
+  if (code < 90)   return "🌨️"
+  return "⛈️"
 }
 
-// ── 7. Busca principal (coordenadas → clima) ──
-async function searchWeather() {
-  const city = document.getElementById('cityInput').value.trim();
+function getWeatherDesc(code) {
+  if (code === 0)  return "Céu limpo"
+  if (code === 1)  return "Principalmente limpo"
+  if (code === 2)  return "Parcialmente nublado"
+  if (code === 3)  return "Nublado"
+  if (code < 50)   return "Nevoeiro"
+  if (code < 60)   return "Garoa"
+  if (code < 70)   return "Chuva"
+  if (code < 80)   return "Neve"
+  if (code < 90)   return "Pancadas de chuva"
+  return "Tempestade"
+}
 
-  if (!city) {
-    showError('Por favor, informe o nome de uma cidade.');
-    return;
-  }
+function getWindDir(deg) {
+  const dirs = ['N','NE','L','SE','S','SO','O','NO']
+  return dirs[Math.round(deg / 45) % 8]
+}
 
-  // Oculta resultados anteriores
-  hide('weatherCard');
-  hide('errorMsg');
-  show('loading');
+function formatDay(dateStr, isFirst) {
+  if (isFirst) return "Hoje"
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase()
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return '--'
+  const d = new Date(isoStr)
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+async function searchWeather(cityOverride) {
+  const city = cityOverride || document.getElementById('cityInput').value.trim()
+  if (!city) { showError("Digite o nome de uma cidade"); return }
+
+  if (cityOverride) document.getElementById('cityInput').value = cityOverride
+
+  hide('errorMsg')
+  hide('currentWeather')
+  hide('extraRow')
+  hide('forecastWrap')
+  hide('sunWrap')
+  document.getElementById('forecast').innerHTML = ''
+  show('loading')
 
   try {
-    // 7a. Geocodificação: nome → lat/lon
-    const geoURL = `https://geocoding-api.open-meteo.com/v1/search` +
-                   `?name=${encodeURIComponent(city)}&count=1&language=pt&format=json`;
+    const geoRes = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=pt`
+    )
+    const geoData = await geoRes.json()
+    if (!geoData.results || geoData.results.length === 0) throw new Error("Cidade não encontrada")
 
-    const geoRes  = await fetch(geoURL);
-    const geoData = await geoRes.json();
+    const { latitude, longitude, name, country, admin1 } = geoData.results[0]
 
-    if (!geoData.results || geoData.results.length === 0) {
-      throw new Error(`Cidade '${city}' não encontrada. Verifique o nome e tente novamente.`);
-    }
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${latitude}&longitude=${longitude}` +
+      `&current_weather=true` +
+      `&hourly=relativehumidity_2m,apparent_temperature,uv_index` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum` +
+      `&timezone=auto&forecast_days=6`
+    )
+    const data = await res.json()
 
-    const { latitude, longitude, name, country } = geoData.results[0];
-    const displayName = country ? `${name}, ${country}` : name;
+    const cw = data.current_weather
+    const nowHour = new Date(cw.time).getHours()
 
-    // 7b. Clima atual — usando o parâmetro "current" (atual da API)
-    const wxURL = `https://api.open-meteo.com/v1/forecast` +
-                  `?latitude=${latitude}&longitude=${longitude}` +
-                  `&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m` +
-                  `&wind_speed_unit=kmh`;
+    const humidity  = data.hourly?.relativehumidity_2m?.[nowHour] ?? '--'
+    const uvIndex   = data.hourly?.uv_index?.[nowHour]            ?? '--'
+    const feelsLike = data.hourly?.apparent_temperature?.[nowHour] ?? '--'
+    const locationLabel = admin1 ? `${name}, ${admin1} — ${country}` : `${name}, ${country}`
 
-    const wxRes  = await fetch(wxURL);
-    const wxData = await wxRes.json();
+    // ── CARD ATUAL ──
+    document.getElementById('currentWeather').innerHTML = `
+      <div class="card-top">
+        <div class="city-row">
+          <i class="fa-solid fa-location-dot"></i>
+          ${locationLabel}
+        </div>
+        <div class="main-temp-row">
+          <div>
+            <div class="temp">${Math.round(cw.temperature)}<sup>°C</sup></div>
+            <div class="desc">${getWeatherDesc(cw.weathercode)}</div>
+          </div>
+          <div class="weather-icon-big">${getIcon(cw.weathercode)}</div>
+        </div>
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">
+          <div class="stat-icon">💨</div>
+          <div>
+            <div class="stat-label">Vento</div>
+            <div class="stat-value">${Math.round(cw.windspeed)} km/h ${getWindDir(cw.winddirection)}</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">🌡️</div>
+          <div>
+            <div class="stat-label">Sensação</div>
+            <div class="stat-value">${feelsLike !== '--' ? Math.round(feelsLike) + '°C' : '--'}</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">🌧️</div>
+          <div>
+            <div class="stat-label">Chuva hoje</div>
+            <div class="stat-value">${data.daily?.precipitation_sum?.[0] ?? '0'} mm</div>
+          </div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-icon">🧭</div>
+          <div>
+            <div class="stat-label">Direção</div>
+            <div class="stat-value">${cw.winddirection}° ${getWindDir(cw.winddirection)}</div>
+          </div>
+        </div>
+      </div>
+    `
+    show('currentWeather')
 
-    if (!wxData.current) {
-      throw new Error('Não foi possível obter os dados climáticos. Tente novamente.');
-    }
+    // ── UMIDADE + UV ──
+    const humPct = typeof humidity === 'number' ? Math.min(humidity, 100) : 0
+    const uvPct  = typeof uvIndex  === 'number' ? Math.min((uvIndex / 11) * 100, 100) : 0
+    document.getElementById('extraRow').innerHTML = `
+      <div class="extra-card">
+        <div class="extra-label"><i class="fa-solid fa-droplet"></i> Umidade</div>
+        <div class="extra-value">${humidity !== '--' ? humidity : '--'}<span>%</span></div>
+        <div class="bar-wrap">
+          <div class="bar-fill" style="width:${humPct}%; background: linear-gradient(90deg,#38bdf8,#818cf8)"></div>
+        </div>
+      </div>
+      <div class="extra-card">
+        <div class="extra-label"><i class="fa-solid fa-sun"></i> Índice UV</div>
+        <div class="extra-value">${uvIndex !== '--' ? Math.round(uvIndex) : '--'}<span>/11</span></div>
+        <div class="bar-wrap">
+          <div class="bar-fill" style="width:${uvPct}%; background: linear-gradient(90deg,#fbbf24,#f97316)"></div>
+        </div>
+      </div>
+    `
+    show('extraRow')
 
-    renderWeather(displayName, wxData);
+    // ── PREVISÃO RICA ──
+    const forecastEl = document.getElementById('forecast')
+    const maxPrecip = Math.max(...(data.daily.precipitation_sum || [1]))
+
+    data.daily.time.slice(0, 6).forEach((day, i) => {
+      const isToday = i === 0
+      const precip  = data.daily.precipitation_sum?.[i] ?? 0
+      const precipPct = maxPrecip > 0 ? Math.round((precip / maxPrecip) * 100) : 0
+      const tempRange = data.daily.temperature_2m_max[i] - data.daily.temperature_2m_min[i]
+
+      forecastEl.innerHTML += `
+        <div class="forecast-card${isToday ? ' today' : ''}">
+          <div class="fc-top">
+            <div class="fc-day">${formatDay(day, isToday)}</div>
+            <span class="fc-icon">${getIcon(data.daily.weathercode[i])}</span>
+            <div class="fc-cond">${getWeatherDesc(data.daily.weathercode[i])}</div>
+          </div>
+          <div class="fc-bottom">
+            <div class="fc-temp-row">
+              <span class="fc-max">${Math.round(data.daily.temperature_2m_max[i])}°</span>
+              <span class="fc-min">${Math.round(data.daily.temperature_2m_min[i])}°</span>
+            </div>
+            ${precip > 0 ? `<div class="fc-precip">💧 ${precip} mm</div>` : ''}
+            <div class="fc-bar-wrap">
+              <div class="fc-bar-fill" style="width:${Math.min(Math.round((tempRange/20)*100),100)}%"></div>
+            </div>
+          </div>
+        </div>
+      `
+    })
+    show('forecastWrap')
+
+    // ── NASCER / PÔR DO SOL ──
+    const sunrise = formatTime(data.daily?.sunrise?.[0])
+    const sunset  = formatTime(data.daily?.sunset?.[0])
+    document.getElementById('sunWrap').innerHTML = `
+      <div class="sun-card">
+        <div class="sun-icon">🌅</div>
+        <div>
+          <div class="s-label">Nascer do sol</div>
+          <div class="s-value">${sunrise}</div>
+        </div>
+      </div>
+      <div class="sun-card">
+        <div class="sun-icon">🌇</div>
+        <div>
+          <div class="s-label">Pôr do sol</div>
+          <div class="s-value">${sunset}</div>
+        </div>
+      </div>
+    `
+    show('sunWrap')
 
   } catch (err) {
-    showError(err.message || 'Erro inesperado. Tente novamente.');
+    showError(err.message)
   } finally {
-    hide('loading');
+    hide('loading')
   }
 }
 
-// ── 8. Eventos ──
-document.getElementById('searchBtn').addEventListener('click', searchWeather);
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById('searchBtn').addEventListener('click', () => searchWeather())
+  document.getElementById('cityInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchWeather()
+  })
 
-document.getElementById('cityInput').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') searchWeather();
-});
+  // botões rápidos
+  document.querySelectorAll('.qc-btn').forEach(btn => {
+    btn.addEventListener('click', () => searchWeather(btn.dataset.city))
+  })
+})
